@@ -1,3 +1,5 @@
+import com.android.build.gradle.internal.cxx.configure.gradleLocalProperties
+
 plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.jetbrainsKotlinAndroid)
@@ -19,6 +21,9 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        val oauthClientId: String = gradleLocalProperties(rootDir, providers).getProperty("GOOGLE_OAUTH_CLIENT_ID")
+        buildConfigField("String", "GOOGLE_OAUTH_CLIENT_ID", oauthClientId)
     }
 
     buildTypes {
