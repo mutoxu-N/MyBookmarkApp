@@ -7,82 +7,132 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Button
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.github.mutoxu_n.mybookmark.model.Bookmark
+import com.github.mutoxu_n.mybookmark.model.Tag
 import com.github.mutoxu_n.mybookmark.ui.theme.MyBookmarkTheme
 import com.google.android.gms.auth.api.identity.BeginSignInRequest
 import com.google.android.gms.auth.api.identity.Identity
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInClient
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.auth.api.identity.SignInClient
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.ktx.auth
+import com.google.firebase.firestore.DocumentChange
+import com.google.firebase.firestore.EventListener
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
+import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.QuerySnapshot
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 
 class MainActivity : ComponentActivity() {
 
     companion object {
+        private const val TAG = "[MyBookmark] MainActivity.kt"
         private const val AUTH_EMULATOR_HOST = "10.0.2.2"
         private const val AUTH_EMULATOR_PORT = 9099
         private const val FIRESTORE_EMULATOR_HOST = "10.0.2.2"
         private const val FIRESTORE_EMULATOR_PORT = 8080
     }
 
-    private lateinit var firebaseAuth: FirebaseAuth
+    private lateinit var auth: FirebaseAuth
     private lateinit var firestore: FirebaseFirestore
-    private lateinit var gsc: GoogleSignInClient
-    private val signInLauncher = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
-        Log.e("MainActivity.kt", "code: ${result.resultCode}")
+    private lateinit var signInClient: SignInClient
+    private var bookmarks = mutableStateListOf<Bookmark>()
 
+
+    private val signInLauncher = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
         if(result.resultCode == RESULT_OK) {
             if(result.data != null) {
+                // Googleアカウント ログイン成功
                 val credential = try {
-                    Identity.getSignInClient(this).getSignInCredentialFromIntent(result.data)
+                    signInClient.getSignInCredentialFromIntent(result.data)
                 } catch (e: Exception) {
                     e.printStackTrace()
                     null
                 }
 
-                Log.e("MainActivity.kt", "${credential?.displayName}")
-
                 val idToken = credential?.googleIdToken
-                if(idToken != null)
-                    Toast.makeText(this, "Logged in as ${credential.displayName}!", Toast.LENGTH_SHORT).show()
+                if(idToken != null) {
+                    // Googleアカウントの資格情報からFirebaseUserにログイン
+                    val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
+                    auth.signInWithCredential(firebaseCredential)
+                        .addOnCompleteListener { task ->
+                            if(task.isSuccessful)
+                                changeUser(auth.currentUser)
+
+                            else {
+                                Log.w(TAG, "Firebaseログインに失敗しました")
+                                showLoginFailedMessage()
+                            }
+                        }
+
+
+                } else {
+                    // ログイン失敗
+                    Log.w(TAG, "GoogleアカウントTokenの取得に失敗しました.")
+                    showLoginFailedMessage()
+                }
+
+            } else {
+                // ログイン失敗
+                Log.w(TAG, "Googleアカウントの資格情報が不明です.")
+                showLoginFailedMessage()
             }
+
         } else {
-            Log.e("MainActivity.kt", "data: ${result.data}")
-            try {
-                Identity.getSignInClient(this).getSignInCredentialFromIntent(result.data)
-            } catch (e: Exception) {
-                Log.e("MainActivity.kt", e.message.toString())
-                e.printStackTrace()
-            }
+            // ログイン失敗
+            Log.w(TAG, "OneTap認証が正常に終了しませんでした.")
+            showLoginFailedMessage()
         }
     }
+
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // SignInClient取得
+        signInClient = Identity.getSignInClient(this@MainActivity)
+
         // Firebase Auth取得
-        firebaseAuth = Firebase.auth
+        auth = Firebase.auth
 
         // Firestore取得
         firestore = Firebase.firestore
 
         if (BuildConfig.DEBUG) {
-            firebaseAuth.useEmulator(AUTH_EMULATOR_HOST, AUTH_EMULATOR_PORT)
+            auth.useEmulator(AUTH_EMULATOR_HOST, AUTH_EMULATOR_PORT)
             firestore.useEmulator(FIRESTORE_EMULATOR_HOST, FIRESTORE_EMULATOR_PORT)
         }
 
-        gsc = GoogleSignIn.getClient(this, GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build())
+        login()
 
         setContent {
             MyBookmarkTheme {
@@ -91,7 +141,12 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     MainScreen(
-                        onAddItemClicked = { login() }
+                        bookmarks = bookmarks,
+                        createBookmark= { bm -> createBookmark(bm) },
+                        updateBookmark = {},
+                        addTagBookmark ={ _, _ -> },
+                        removeTagBookmark = { _, _ -> },
+                        searchFromTag= {},
                     )
                 }
             }
@@ -99,16 +154,23 @@ class MainActivity : ComponentActivity() {
     }
 
 
-    private fun onAddItemClicked() {
-        val ref = firestore.collection("test")
-        ref.add(Bookmark(
-            title = "Google",
-            url = "https://www.google.com/",
-        ))
+    private fun createBookmark(bookmark: Bookmark) {
+        if(auth.uid == null) return
+
+        val ref = firestore
+            .collection("users")
+            .document(auth.uid!!)
+            .collection("bookmarks")
+        ref.add(bookmark)
     }
 
+    private fun updateBookmark(bookmark: Bookmark) {
+//        val ref = firestore.collection("/users/${auth.uid}/bookmarks/")
+//        ref.update(bookmark)
+    }
+
+
     private fun login() {
-        val oneTapClient = Identity.getSignInClient(this)
         val request: BeginSignInRequest? = try {
                 BeginSignInRequest.Builder()
                     .setPasswordRequestOptions(
@@ -127,8 +189,9 @@ class MainActivity : ComponentActivity() {
                 null
             }
 
+        // Googleアカウントログイン
         request?.let {
-            oneTapClient.beginSignIn(it)
+            signInClient.beginSignIn(it)
                 .addOnSuccessListener { result ->
                     signInLauncher.launch(IntentSenderRequest.Builder(result.pendingIntent.intentSender).build())
                 }
@@ -136,19 +199,94 @@ class MainActivity : ComponentActivity() {
                     e.printStackTrace()
                 }
         }
-
-//        val intent = gsc.signInIntent
-//        signInLauncher.launch(intent)
     }
+
+
+    private fun changeUser(user: FirebaseUser?) {
+        Log.d(TAG, "Now Logged in: ${user?.displayName}")
+    }
+
+
+    private fun showLoginFailedMessage() {
+        Toast
+            .makeText(this, "Some problems occurred while logging in.", Toast.LENGTH_SHORT)
+            .show()
+    }
+
+    private fun getBookmarkList() {
+        firestore.collection("/users/${auth.uid}/bookmarks")
+            .get()
+            .addOnSuccessListener { result ->
+                for(doc in result) {
+                    Log.d(TAG, "${doc.data}")
+                }
+            }
+            .addOnFailureListener { e -> Log.w(TAG, "Error getting docs: ", e) }
+
+    }
+
 }
 
 @Composable
 fun MainScreen(
-    onAddItemClicked: () -> Unit,
+    bookmarks: SnapshotStateList<Bookmark>,
+    createBookmark: (Bookmark) -> Unit,
+    updateBookmark: (Bookmark) -> Unit,
+    addTagBookmark: (Bookmark, Tag) -> Unit,
+    removeTagBookmark: (Bookmark, Tag) -> Unit,
+    searchFromTag: (Tag) -> Unit,
 ) {
-    Button(onClick = {
-        onAddItemClicked()
-    }) {
-        Text(text = "Add!")
+    var showAddDialog by remember { mutableStateOf(false) }
+
+    Scaffold(
+        floatingActionButton = {
+            FloatingActionButton(onClick = { showAddDialog = true }) {
+                Icon(imageVector = Icons.Default.Add, contentDescription = null)
+            }
+        }
+    ) {
+        BookmarkList(
+            modifier = Modifier.padding(it),
+            bookmarks = bookmarks,
+        )
     }
+
+    if(showAddDialog) {
+        BookmarkDialog(
+            onDismissed = { showAddDialog = false },
+            onConfirmed = { bookmark ->
+                createBookmark(bookmark)
+                showAddDialog = false
+            },
+        )
+    }
+}
+
+@Composable
+fun BookmarkList(
+    modifier: Modifier = Modifier,
+    bookmarks: SnapshotStateList<Bookmark>,
+){
+    LazyColumn(
+        modifier = modifier.fillMaxWidth(1f),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
+        contentPadding = PaddingValues(8.dp, 3.dp),
+    ) {
+        items(bookmarks) { bookmark ->
+            key(bookmark.title) {
+
+            }
+        }
+
+    }
+}
+
+@Composable
+fun BookmarkListItem(
+    modifier: Modifier,
+    bookmark: Bookmark,
+) {
+    Text(
+        text = bookmark.title ?: ""
+    )
 }

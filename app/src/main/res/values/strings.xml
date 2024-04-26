@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">MyBookmark</string>
+    <string name="dialog_title_bm_create">ブックマークの作成</string>
+    <string name="dialog_title_bm_edit">ブックマークの編集</string>
 </resources>
