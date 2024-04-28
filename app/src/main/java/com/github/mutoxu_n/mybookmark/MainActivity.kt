@@ -178,52 +178,39 @@ class MainActivity : ComponentActivity() {
     }
 
 
-    private fun getBookmarkList() {
-            firestore
-                .collection("users")
-                .document(auth.uid!!)
-                .collection("bookmarks")
-                .get()
-                .addOnCompleteListener { task ->
-                    if(task.isSuccessful) {
-                        bookmarks.clear()
-                        task.result.forEach { bookmarks.add(Bookmark.toBookmark(it.data)) }
+    // アプリ起動時にFirestoreリスナを設定
+    private fun registerSnapshotListener() {
+        firestore
+            .collection("users")
+            .document(auth.uid!!)
+            .collection("bookmarks")
+            .addSnapshotListener { value, error ->
+                if(error != null) {
+                    Log.w(TAG, "Firestore / Listen failed!", error)
+                    return@addSnapshotListener
+                }
 
-                        if(this.snapshotListener == null) {
-                            snapshotListener = firestore
-                                .collection("users")
-                                .document(auth.uid!!)
-                                .collection("bookmarks")
-                                .addSnapshotListener { value, error ->
-                                    if(error != null) {
-                                        Log.w(TAG, "Firestore / Listen failed!", error)
-                                        return@addSnapshotListener
-                                    }
+                if(value != null) {
+                    bookmarks.clear()
+                    value.forEach {
+                        // データをBookmarkに変更してbookmarksを更新
+                        try {
+                            bookmarks.add(Bookmark.toBookmark(it.data))
 
-                                    if(value != null) {
-                                        bookmarks.clear()
-                                        value.forEach {
-                                            // データをBookmarkに変更してbookmarksを更新
-                                            try {
-                                                bookmarks.add(Bookmark.toBookmark(it.data))
-
-                                            } catch (e: ClassCastException) {
-                                                Log.w(TAG, "Data from Firestore cannot be converted to Bookmark")
-                                                e.printStackTrace()
-                                            }
-                                        }
-                                    }
-                                }
+                        } catch (e: ClassCastException) {
+                            Log.w(TAG, "Data from Firestore cannot be converted to Bookmark")
+                            e.printStackTrace()
                         }
                     }
                 }
+            }
     }
 
 
     private fun login() {
         // ログイン済みならパス
         if(auth.uid != null) {
-            getBookmarkList()
+            registerSnapshotListener()
             return
         }
 
@@ -269,7 +256,7 @@ class MainActivity : ComponentActivity() {
 
     private fun changeUser(user: FirebaseUser?) {
         Log.d(TAG, "Now Logged in: ${user?.displayName}")
-        getBookmarkList()
+        registerSnapshotListener()
     }
 
 
