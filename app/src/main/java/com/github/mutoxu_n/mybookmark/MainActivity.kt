@@ -75,7 +75,7 @@ class MainActivity : ComponentActivity() {
                     auth.signInWithCredential(firebaseCredential)
                         .addOnCompleteListener { task ->
                             if(task.isSuccessful)
-                                changeUser(auth.currentUser)
+                                userChanged(auth.currentUser)
 
                             else {
                                 Log.w(TAG, "Firebaseログインに失敗しました")
@@ -152,6 +152,7 @@ class MainActivity : ComponentActivity() {
             .collection("users")
             .document(auth.uid!!)
             .collection("bookmarks")
+
         ref
             .add(bookmark)
             .addOnSuccessListener { docRef ->
@@ -174,7 +175,17 @@ class MainActivity : ComponentActivity() {
             ref.document(it).update(Bookmark.FIELD_DESCRIPTION, bookmark.description)
             ref.document(it).update(Bookmark.FIELD_TAGS, bookmark.tags)
         }
+    }
 
+    private fun deleteBookmark(bookmark: Bookmark) {
+        if(auth.uid == null || bookmark.documentId == null) return
+
+        firestore
+            .collection("users")
+            .document(auth.uid!!)
+            .collection("bookmarks")
+            .document(bookmark.documentId)
+            .delete()
     }
 
 
@@ -254,7 +265,7 @@ class MainActivity : ComponentActivity() {
     }
 
 
-    private fun changeUser(user: FirebaseUser?) {
+    private fun userChanged(user: FirebaseUser?) {
         Log.d(TAG, "Now Logged in: ${user?.displayName}")
         registerSnapshotListener()
     }
