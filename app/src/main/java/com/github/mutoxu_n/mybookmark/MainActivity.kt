@@ -147,6 +147,7 @@ class MainActivity : ComponentActivity() {
                         removeTagBookmark = { _, _ -> },
                         searchFromTag= {},
                         login= { login() },
+                        logout= { logout() },
                     )
                 }
             }
@@ -203,6 +204,12 @@ class MainActivity : ComponentActivity() {
 
 
     private fun login() {
+        // ログイン済みならパス
+        if(auth.uid != null) {
+            getBookmarkList()
+            return
+        }
+
         val request: BeginSignInRequest? = try {
                 BeginSignInRequest.Builder()
                     .setPasswordRequestOptions(
@@ -235,6 +242,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun logout() {
+        auth.signOut()
+    }
+
 
     private fun changeUser(user: FirebaseUser?) {
         Log.d(TAG, "Now Logged in: ${user?.displayName}")
@@ -260,6 +271,7 @@ fun MainScreen(
     removeTagBookmark: (Bookmark, Tag) -> Unit,
     searchFromTag: (Tag) -> Unit,
     login: () -> Unit,
+    logout: () -> Unit,
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
 
