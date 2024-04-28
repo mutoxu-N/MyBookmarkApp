@@ -1,45 +1,38 @@
 package com.github.mutoxu_n.mybookmark.model
 
-import android.text.TextUtils
-import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.Timestamp
 import com.google.firebase.firestore.IgnoreExtraProperties
 import com.google.firebase.firestore.ServerTimestamp
 import java.util.Date
+import java.util.Objects
 
 @IgnoreExtraProperties
 data class Bookmark(
-    var userId: String? = null,
-    var userName: String? = null,
-    var title: String? = null,
-    var url: String? = null,
-    var description: String? = null,
-    var tags: List<Tag>? = null,
+    val documentId: String? = null,
+    var title: String,
+    var url: String,
+    var description: String = "",
+    var tags: List<Tag> = listOf(),
     @ServerTimestamp var timestamp: Date? = null,
 ) {
-    constructor(
-        user: FirebaseUser,
-        title: String,
-        url: String,
-        description: String?,
-        tags: List<Tag>,
-    ): this() {
-        this.userId = user.uid
-        this.userName = user.displayName
-        if(TextUtils.isEmpty(this.userName)) this.userName = user.email
-
-        this.title = title
-        this.url = url
-        this.description = description
-        this.tags = tags
-    }
-
     companion object {
-        const val FIELD_USER_ID = "userId"
-        const val FIELD_USER_NAME = "userName"
+        const val DOCUMENT_ID = "documentId"
         const val FIELD_TITLE = "title"
         const val FIELD_URL = "url"
         const val FIELD_DESCRIPTION = "description"
         const val FIELD_TAGS = "tags"
         const val FIELD_TIMESTAMP = "timestamp"
+
+        @Suppress("UNCHECKED_CAST")
+        fun toBookmark(map: Map<String, Any>): Bookmark {
+            return Bookmark(
+                documentId = map[DOCUMENT_ID] as String?,
+                title = map[FIELD_TITLE] as String,
+                url = map[FIELD_URL] as String,
+                description = map[FIELD_DESCRIPTION] as String,
+                tags = map[FIELD_TAGS] as List<Tag>,
+                timestamp = (map[FIELD_TIMESTAMP] as Timestamp).toDate(),
+            )
+        }
     }
 }

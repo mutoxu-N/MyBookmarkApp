@@ -7,7 +7,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -42,14 +45,10 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.ktx.auth
-import com.google.firebase.firestore.DocumentChange
-import com.google.firebase.firestore.EventListener
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.FirebaseFirestoreException
-import com.google.firebase.firestore.Query
-import com.google.firebase.firestore.QuerySnapshot
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import kotlin.math.log
 
 class MainActivity : ComponentActivity() {
 
@@ -147,6 +146,7 @@ class MainActivity : ComponentActivity() {
                         addTagBookmark ={ _, _ -> },
                         removeTagBookmark = { _, _ -> },
                         searchFromTag= {},
+                        login= { login() },
                     )
                 }
             }
@@ -161,12 +161,44 @@ class MainActivity : ComponentActivity() {
             .collection("users")
             .document(auth.uid!!)
             .collection("bookmarks")
-        ref.add(bookmark)
+        ref
+            .add(bookmark)
+            .addOnSuccessListener { docRef ->
+                ref.document(docRef.id).update(Bookmark.DOCUMENT_ID, docRef.id)
+            }
+
     }
 
     private fun updateBookmark(bookmark: Bookmark) {
-//        val ref = firestore.collection("/users/${auth.uid}/bookmarks/")
-//        ref.update(bookmark)
+        if(auth.uid == null) return
+
+        val ref = firestore
+            .collection("users")
+            .document(auth.uid!!)
+            .collection("bookmarks")
+
+        bookmark.documentId?.let {
+            ref.document(it).update(Bookmark.FIELD_TITLE, bookmark.title)
+            ref.document(it).update(Bookmark.FIELD_URL, bookmark.url)
+            ref.document(it).update(Bookmark.FIELD_DESCRIPTION, bookmark.description)
+            ref.document(it).update(Bookmark.FIELD_TAGS, bookmark.tags)
+        }
+
+    }
+
+
+    private fun getBookmarkList() {
+            firestore
+                .collection("users")
+                .document(auth.uid!!)
+                .collection("bookmarks")
+                .get()
+                .addOnCompleteListener { task ->
+                    if(task.isSuccessful) {
+                        bookmarks.clear()
+                        task.result.forEach { bookmarks.add(Bookmark.toBookmark(it.data)) }
+                    }
+                }
     }
 
 
@@ -189,6 +221,7 @@ class MainActivity : ComponentActivity() {
                 null
             }
 
+
         // Googleアカウントログイン
         request?.let {
             signInClient.beginSignIn(it)
@@ -196,6 +229,7 @@ class MainActivity : ComponentActivity() {
                     signInLauncher.launch(IntentSenderRequest.Builder(result.pendingIntent.intentSender).build())
                 }
                 .addOnFailureListener { e ->
+                    Log.w(TAG, "端末で1つ以上のGoogleアカウントにログインしている必要があります. ")
                     e.printStackTrace()
                 }
         }
@@ -204,6 +238,7 @@ class MainActivity : ComponentActivity() {
 
     private fun changeUser(user: FirebaseUser?) {
         Log.d(TAG, "Now Logged in: ${user?.displayName}")
+        getBookmarkList()
     }
 
 
@@ -213,17 +248,6 @@ class MainActivity : ComponentActivity() {
             .show()
     }
 
-    private fun getBookmarkList() {
-        firestore.collection("/users/${auth.uid}/bookmarks")
-            .get()
-            .addOnSuccessListener { result ->
-                for(doc in result) {
-                    Log.d(TAG, "${doc.data}")
-                }
-            }
-            .addOnFailureListener { e -> Log.w(TAG, "Error getting docs: ", e) }
-
-    }
 
 }
 
@@ -235,6 +259,7 @@ fun MainScreen(
     addTagBookmark: (Bookmark, Tag) -> Unit,
     removeTagBookmark: (Bookmark, Tag) -> Unit,
     searchFromTag: (Tag) -> Unit,
+    login: () -> Unit,
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
 
@@ -269,12 +294,15 @@ fun BookmarkList(
 ){
     LazyColumn(
         modifier = modifier.fillMaxWidth(1f),
-        verticalArrangement = Arrangement.spacedBy(5.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
         contentPadding = PaddingValues(8.dp, 3.dp),
     ) {
         items(bookmarks) { bookmark ->
-            key(bookmark.title) {
-
+            key(bookmark.documentId) {
+                BookmarkListItem(
+                    modifier = modifier,
+                    bookmark = bookmark
+                )
             }
         }
 
@@ -286,7 +314,14 @@ fun BookmarkListItem(
     modifier: Modifier,
     bookmark: Bookmark,
 ) {
-    Text(
-        text = bookmark.title ?: ""
-    )
+    Surface(
+        modifier = modifier.fillMaxWidth(1f),
+        color = MaterialTheme.colorScheme.primaryContainer,
+
+    ) {
+        Column(modifier.padding(8.dp, 12.dp)) {
+            Text(text = bookmark.title)
+            Text(text = bookmark.documentId.toString())
+        }
+    }
 }
