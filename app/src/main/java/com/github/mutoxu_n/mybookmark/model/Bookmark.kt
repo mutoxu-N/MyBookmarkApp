@@ -5,6 +5,7 @@ import com.google.firebase.firestore.IgnoreExtraProperties
 import com.google.firebase.firestore.ServerTimestamp
 import java.util.Date
 import java.util.Objects
+import kotlin.jvm.Throws
 
 @IgnoreExtraProperties
 data class Bookmark(
@@ -24,14 +25,15 @@ data class Bookmark(
         const val FIELD_TIMESTAMP = "timestamp"
 
         @Suppress("UNCHECKED_CAST")
-        fun toBookmark(map: Map<String, Any>): Bookmark {
+        @Throws(ClassCastException::class)
+        fun toBookmark(map: Map<String, Any>): Bookmark{
             return Bookmark(
                 documentId = map[DOCUMENT_ID] as String?,
                 title = map[FIELD_TITLE] as String,
                 url = map[FIELD_URL] as String,
                 description = map[FIELD_DESCRIPTION] as String,
                 tags = map[FIELD_TAGS] as List<Tag>,
-                timestamp = (map[FIELD_TIMESTAMP] as Timestamp).toDate(),
+                timestamp = if(map[FIELD_TIMESTAMP] == null) null else (map[FIELD_TIMESTAMP] as Timestamp).toDate(),
             )
         }
     }

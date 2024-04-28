@@ -7,34 +7,24 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import com.github.mutoxu_n.mybookmark.com.github.mutoxu_n.mybookmark.BookmarkDialog
 import com.github.mutoxu_n.mybookmark.model.Bookmark
 import com.github.mutoxu_n.mybookmark.model.Tag
 import com.github.mutoxu_n.mybookmark.ui.theme.MyBookmarkTheme
@@ -46,9 +36,9 @@ import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
-import kotlin.math.log
 
 class MainActivity : ComponentActivity() {
 
@@ -64,6 +54,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var firestore: FirebaseFirestore
     private lateinit var signInClient: SignInClient
     private var bookmarks = mutableStateListOf<Bookmark>()
+    private var snapshotListener: ListenerRegistration? = null
 
 
     private val signInLauncher = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
@@ -111,7 +102,6 @@ class MainActivity : ComponentActivity() {
             showLoginFailedMessage()
         }
     }
-
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -198,6 +188,33 @@ class MainActivity : ComponentActivity() {
                     if(task.isSuccessful) {
                         bookmarks.clear()
                         task.result.forEach { bookmarks.add(Bookmark.toBookmark(it.data)) }
+
+                        if(this.snapshotListener == null) {
+                            snapshotListener = firestore
+                                .collection("users")
+                                .document(auth.uid!!)
+                                .collection("bookmarks")
+                                .addSnapshotListener { value, error ->
+                                    if(error != null) {
+                                        Log.w(TAG, "Firestore / Listen failed!", error)
+                                        return@addSnapshotListener
+                                    }
+
+                                    if(value != null) {
+                                        bookmarks.clear()
+                                        value.forEach {
+                                            // データをBookmarkに変更してbookmarksを更新
+                                            try {
+                                                bookmarks.add(Bookmark.toBookmark(it.data))
+
+                                            } catch (e: ClassCastException) {
+                                                Log.w(TAG, "Data from Firestore cannot be converted to Bookmark")
+                                                e.printStackTrace()
+                                            }
+                                        }
+                                    }
+                                }
+                        }
                     }
                 }
     }
@@ -243,6 +260,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun logout() {
+        // 変更検知リスナ削除
+        snapshotListener?.remove()
+        snapshotListener = null
         auth.signOut()
     }
 
@@ -296,44 +316,5 @@ fun MainScreen(
                 showAddDialog = false
             },
         )
-    }
-}
-
-@Composable
-fun BookmarkList(
-    modifier: Modifier = Modifier,
-    bookmarks: SnapshotStateList<Bookmark>,
-){
-    LazyColumn(
-        modifier = modifier.fillMaxWidth(1f),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-        contentPadding = PaddingValues(8.dp, 3.dp),
-    ) {
-        items(bookmarks) { bookmark ->
-            key(bookmark.documentId) {
-                BookmarkListItem(
-                    modifier = modifier,
-                    bookmark = bookmark
-                )
-            }
-        }
-
-    }
-}
-
-@Composable
-fun BookmarkListItem(
-    modifier: Modifier,
-    bookmark: Bookmark,
-) {
-    Surface(
-        modifier = modifier.fillMaxWidth(1f),
-        color = MaterialTheme.colorScheme.primaryContainer,
-
-    ) {
-        Column(modifier.padding(8.dp, 12.dp)) {
-            Text(text = bookmark.title)
-            Text(text = bookmark.documentId.toString())
-        }
     }
 }
