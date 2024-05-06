@@ -11,10 +11,10 @@ service cloud.firestore {
       allow read, update: if isAuthenticated(userId);
 
       match /bookmarks/{bookmark_id} {
-        allow create, read, update: if isAuthenticated(userId);
+        allow create, read, update, delete: if isAuthenticated(userId);
       }
       match /tags/{tag_name} {
-        allow create, read, update: if isAuthenticated(userId);
+        allow create, read, update, delete: if isAuthenticated(userId);
       }
     }
   }

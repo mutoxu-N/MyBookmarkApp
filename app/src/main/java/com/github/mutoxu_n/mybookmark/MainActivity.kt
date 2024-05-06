@@ -37,6 +37,7 @@ import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 
@@ -54,6 +55,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var firestore: FirebaseFirestore
     private lateinit var signInClient: SignInClient
     private var bookmarks = mutableStateListOf<Bookmark>()
+    private var isConnected by mutableStateOf(false)
     private var snapshotListener: ListenerRegistration? = null
 
 
@@ -121,7 +123,17 @@ class MainActivity : ComponentActivity() {
             firestore.useEmulator(FIRESTORE_EMULATOR_HOST, FIRESTORE_EMULATOR_PORT)
         }
 
+        // ログイン
+        auth.currentUser?.getIdToken(false)?.addOnCompleteListener {
+            // ログインに失敗したらログアウトしてログイン画面を表示
+            isConnected = it.isSuccessful
+            if(!it.isSuccessful)  {
+                logout()
+                login()
+            }
+        }
         login()
+
 
         setContent {
             MyBookmarkTheme {
@@ -129,16 +141,27 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MainScreen(
-                        bookmarks = bookmarks,
-                        createBookmark= { bm -> createBookmark(bm) },
-                        updateBookmark = {},
-                        addTagBookmark ={ _, _ -> },
-                        removeTagBookmark = { _, _ -> },
-                        searchFromTag= {},
-                        login= { login() },
-                        logout= { logout() },
-                    )
+                    if(isConnected) {
+                        MainScreen(
+                            bookmarks = bookmarks,
+                            addBookmark= {createBookmark(it) },
+                            updateBookmark = { updateBookmark(it)},
+                            deleteBookmark = { deleteBookmark(it) },
+                            addTag ={ bm, tag -> addTag2Bookmark(bm, tag) },
+                            deleteTag = { bm, tag -> deleteTagFromBookmark(bm, tag) },
+                            searchFromTag= {},
+                            login= { login() },
+                            logout= { logout() },
+                        )
+                    } else {
+                        LoadingScreen(
+                            modifier = Modifier.fillMaxSize(1f),
+                            onLoginClicked = {
+                                logout()
+                                login()
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -156,7 +179,8 @@ class MainActivity : ComponentActivity() {
         ref
             .add(bookmark)
             .addOnSuccessListener { docRef ->
-                ref.document(docRef.id).update(Bookmark.DOCUMENT_ID, docRef.id)
+                ref.document(docRef.id).update(Bookmark.FIELD_DOCUMENT_ID, docRef.id)
+                ref.document(docRef.id).update(Bookmark.FIELD_TAGS, listOf<String>())
             }
 
     }
@@ -173,12 +197,14 @@ class MainActivity : ComponentActivity() {
             ref.document(it).update(Bookmark.FIELD_TITLE, bookmark.title)
             ref.document(it).update(Bookmark.FIELD_URL, bookmark.url)
             ref.document(it).update(Bookmark.FIELD_DESCRIPTION, bookmark.description)
-            ref.document(it).update(Bookmark.FIELD_TAGS, bookmark.tags)
         }
     }
 
     private fun deleteBookmark(bookmark: Bookmark) {
         if(auth.uid == null || bookmark.documentId == null) return
+
+        for(tag in bookmark.tags)
+            deleteTagFromBookmark(bookmark, tag)
 
         firestore
             .collection("users")
@@ -188,6 +214,80 @@ class MainActivity : ComponentActivity() {
             .delete()
     }
 
+    private fun addTag2Bookmark(bookmark: Bookmark, tag: String) {
+        if(auth.uid == null) return
+
+        // ブックマークにタグを追加
+        val bmRef = firestore
+            .collection("users")
+            .document(auth.uid!!)
+            .collection("bookmarks")
+        bookmark.documentId?.let {
+            bmRef.document(it).update(
+                Bookmark.FIELD_TAGS,
+                bookmark.tags.toMutableList().apply { add(tag) }
+            )
+        }
+
+        val tagRef = firestore
+            .collection("users")
+            .document(auth.uid!!)
+            .collection("tags")
+            .document(tag)
+
+        tagRef.get().addOnCompleteListener {
+            if(it.result.data == null) {
+                // タグが存在しない場合
+                tagRef.set(
+                    mapOf(
+                        Tag.FIELD_NAME to tag,
+                        Tag.FIELD_BOOKMARKS to listOf(bookmark.documentId),
+                    )
+                )
+
+            } else {
+                // タグが存在するとき
+                val tags = it.result.data?.get(Tag.FIELD_BOOKMARKS) as List<*>?
+                if (tags != null)
+                    tagRef.update(Tag.FIELD_BOOKMARKS, tags.toMutableList().apply { add(bookmark.documentId) })
+            }
+        }
+
+    }
+
+    private fun deleteTagFromBookmark(bookmark: Bookmark, tag: String) {
+        if(auth.uid == null) return
+
+        // ブックマークからタグを削除
+        val bmRef = firestore
+            .collection("users")
+            .document(auth.uid!!)
+            .collection("bookmarks")
+        bookmark.documentId?.let {
+            bmRef.document(it).update(
+                Bookmark.FIELD_TAGS,
+                bookmark.tags.toMutableList().apply { remove(tag) }
+            )
+        }
+
+        // タグを削除
+        val tagRef = firestore
+            .collection("users")
+            .document(auth.uid!!)
+            .collection("tags")
+            .document(tag)
+
+        tagRef.get().addOnCompleteListener {
+            // タグが存在するとき
+            val tags = it.result.data?.get(Tag.FIELD_BOOKMARKS) as List<*>? ?: return@addOnCompleteListener
+            val newTags = tags.toMutableList().apply { remove(bookmark.documentId) }
+
+            // 対応するブックマークがなくなったら削除
+            if(newTags.isEmpty()) tagRef.delete()
+            else tagRef.update(Tag.FIELD_BOOKMARKS, newTags)
+        }
+    }
+
 
     // アプリ起動時にFirestoreリスナを設定
     private fun registerSnapshotListener() {
@@ -195,6 +295,7 @@ class MainActivity : ComponentActivity() {
             .collection("users")
             .document(auth.uid!!)
             .collection("bookmarks")
+            .orderBy(Bookmark.FIELD_TIMESTAMP, Query.Direction.ASCENDING)
             .addSnapshotListener { value, error ->
                 if(error != null) {
                     Log.w(TAG, "Firestore / Listen failed!", error)
@@ -266,12 +367,14 @@ class MainActivity : ComponentActivity() {
 
 
     private fun userChanged(user: FirebaseUser?) {
+        isConnected = true
         Log.d(TAG, "Now Logged in: ${user?.displayName}")
         registerSnapshotListener()
     }
 
 
     private fun showLoginFailedMessage() {
+        isConnected = false
         Toast
             .makeText(this, "Some problems occurred while logging in.", Toast.LENGTH_SHORT)
             .show()
@@ -283,11 +386,12 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainScreen(
     bookmarks: SnapshotStateList<Bookmark>,
-    createBookmark: (Bookmark) -> Unit,
+    addBookmark: (Bookmark) -> Unit,
     updateBookmark: (Bookmark) -> Unit,
-    addTagBookmark: (Bookmark, Tag) -> Unit,
-    removeTagBookmark: (Bookmark, Tag) -> Unit,
-    searchFromTag: (Tag) -> Unit,
+    deleteBookmark: (Bookmark) -> Unit,
+    addTag: (Bookmark, String) -> Unit,
+    deleteTag: (Bookmark, String) -> Unit,
+    searchFromTag: (String) -> Unit,
     login: () -> Unit,
     logout: () -> Unit,
 ) {
@@ -303,6 +407,11 @@ fun MainScreen(
         BookmarkList(
             modifier = Modifier.padding(it),
             bookmarks = bookmarks,
+            editBookmark = { bm -> updateBookmark(bm) },
+            deleteBookmark = { bm -> deleteBookmark(bm) },
+            searchFromTag = { bm -> searchFromTag(bm) },
+            addTag = { bm, tag -> addTag(bm, tag) },
+            deleteTag = { bm, tag -> deleteTag(bm, tag) },
         )
     }
 
@@ -310,7 +419,7 @@ fun MainScreen(
         BookmarkDialog(
             onDismissed = { showAddDialog = false },
             onConfirmed = { bookmark ->
-                createBookmark(bookmark)
+                addBookmark(bookmark)
                 showAddDialog = false
             },
         )

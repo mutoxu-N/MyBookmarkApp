@@ -1,5 +1,14 @@
 <resources>
     <string name="app_name">MyBookmark</string>
+    <string name="term_cancel">キャンセル</string>
+    <string name="term_confirm">完了</string>
     <string name="dialog_title_bm_create">ブックマークの作成</string>
     <string name="dialog_title_bm_edit">ブックマークの編集</string>
+    <string name="dialog_title_tag_create">新しいタグの追加</string>
+    <string name="tf_empty_error_mes">%1$sを入力してください</string>
+    <string name="term_tag_name">タグ名</string>
+    <string name="term_login">ログイン</string>
+    <string name="term_title">タイトル</string>
+    <string name="term_url">URL</string>
+    <string name="term_description">説明</string>
 </resources>

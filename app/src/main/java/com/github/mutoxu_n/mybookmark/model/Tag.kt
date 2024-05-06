@@ -1,21 +1,19 @@
 package com.github.mutoxu_n.mybookmark.model
 
-import android.text.TextUtils
-import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.IgnoreExtraProperties
 
 @IgnoreExtraProperties
 data class Tag(
     var name: String? = null,
-    var bookmarks: List<Bookmark>
+    var bookmarkIds: List<String>
 ) {
     constructor(
         name: String,
-        bookmark: Bookmark
-    ): this(name, listOf(bookmark))
+        bookmarkId: String,
+    ): this(name, listOf(bookmarkId))
 
     companion object {
         const val FIELD_NAME = "name"
-        const val FIELD_BOOKMARKS = "bookmarks"
+        const val FIELD_BOOKMARKS = "bookmarkIds"
     }
 }
