@@ -33,10 +33,12 @@ fun LoadingScreen(
         )
 
         Button(
-            modifier = modifier.padding(horizontal = 30.dp),
             onClick = { onLoginClicked() },
         ) {
-            Text(text = stringResource(R.string.term_login))
+            Text(
+                modifier = modifier.padding(horizontal = 30.dp),
+                text = stringResource(R.string.term_login)
+            )
         }
     }
 }
