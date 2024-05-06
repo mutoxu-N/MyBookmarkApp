@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Web
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -30,6 +31,7 @@ import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -40,6 +42,7 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -137,6 +140,7 @@ fun BookmarkListItem(
     openUrl: (String) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    var removeTag by remember { mutableStateOf(null as String?) }
     val animArrowRot by animateFloatAsState(targetValue = if (expanded) 180f else 0f, label = "")
 
     Surface(
@@ -237,7 +241,7 @@ fun BookmarkListItem(
                             onClick = { onTagClicked(tag) },
                             label = { Text(text = tag) },
                             trailingIcon = { Icon(
-                                modifier = modifier.clickable { onDeleteTagClicked(bookmark, tag) },
+                                modifier = modifier.clickable { removeTag = tag },
                                 imageVector = Icons.Default.Close,
                                 contentDescription = null
                             )}
@@ -252,9 +256,53 @@ fun BookmarkListItem(
                         ) },
                     )
                 }
+
+                if(removeTag != null) {
+                    TagRemoveDialog(
+                        modifier = modifier,
+                        bookmark = bookmark.title,
+                        tag = removeTag!!,
+                        onDismiss = { removeTag = null },
+                        onConfirm = {
+                            onDeleteTagClicked(bookmark, removeTag!!)
+                            removeTag = null
+                        },
+                    )
+                }
             }
         }
     }
+}
+
+@Composable
+fun TagRemoveDialog(
+    modifier: Modifier,
+    bookmark: String,
+    tag: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        modifier = modifier,
+        onDismissRequest = { onDismiss() },
+        title = {
+               Text(text = stringResource(R.string.dialog_title_delete_tag))
+        },
+        text = {
+               Text(text = stringResource(R.string.dialog_text_delete_tag, bookmark, tag))
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm() }) {
+                Text(text = stringResource(id = R.string.term_delete_ok))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { onDismiss() }) {
+                Text(text = stringResource(id = R.string.term_delete_cancel))
+            }
+        },
+        
+    ) 
 }
 
 @Preview

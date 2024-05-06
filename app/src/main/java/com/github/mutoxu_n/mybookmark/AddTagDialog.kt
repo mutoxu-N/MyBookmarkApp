@@ -37,7 +37,7 @@ fun AddTagDialog(
                 onClick = { onConfirm(newTagName) },
                 enabled = !isError
             ) {
-                Text(text = stringResource(R.string.term_confirm))
+                Text(text = stringResource(R.string.term_done))
             }
         },
         title = {
