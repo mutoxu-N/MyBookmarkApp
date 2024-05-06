@@ -50,7 +50,7 @@ fun AddTagDialog(
             TextField(
                 value = newTagName,
                 onValueChange = {
-                    isError = it.isEmpty()
+                    isError = it.isBlank()
                     newTagName = it
                 },
                 supportingText = {

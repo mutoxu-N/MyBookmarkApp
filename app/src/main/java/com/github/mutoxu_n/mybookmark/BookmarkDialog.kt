@@ -82,7 +82,7 @@ fun BookmarkDialog(
                    label = { Text(text = stringResource(id = R.string.term_title)) },
                    onValueChange = {
                        title = it.replace("\n", "")
-                       isTitleError = title.isEmpty()
+                       isTitleError = title.isBlank()
                    },
                    maxLines = 1,
                    isError = isTitleError,
@@ -101,7 +101,7 @@ fun BookmarkDialog(
                    label = { Text(text = stringResource(id = R.string.term_url)) },
                    onValueChange = {
                        url = it.replace("\n", "")
-                       isUrlError = url.isEmpty()
+                       isUrlError = url.isBlank()
                    },
                    maxLines = 1,
                    isError = isUrlError,

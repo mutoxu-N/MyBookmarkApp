@@ -182,8 +182,10 @@ fun BookmarkListItem(
             // 展開時
             if(expanded) {
                 Spacer(modifier = modifier.size(3.dp))
-                Text(text = bookmark.description)
-                Divider(modifier.padding(0.dp, 5.dp, 0.dp, 0.dp))
+                if(bookmark.description.replace("\n", "").isNotBlank()) {
+                    Text(text = bookmark.description)
+                    Divider(modifier.padding(0.dp, 5.dp, 0.dp, 0.dp))
+                }
 
                 Row(
                     modifier = modifier.fillMaxWidth(1f),
