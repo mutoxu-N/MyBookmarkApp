@@ -11,4 +11,5 @@
     <string name="term_title">タイトル</string>
     <string name="term_url">URL</string>
     <string name="term_description">説明</string>
+    <string name="term_logout">ログアウト</string>
 </resources>

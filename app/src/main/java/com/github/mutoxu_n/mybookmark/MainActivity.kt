@@ -9,6 +9,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -147,22 +148,26 @@ class MainActivity : ComponentActivity() {
                     if(isConnected) {
                         MainScreen(
                             bookmarks = bookmarks,
+                            searchTags = searchTags,
                             addBookmark= {createBookmark(it) },
                             updateBookmark = { updateBookmark(it)},
                             deleteBookmark = { deleteBookmark(it) },
                             addTag ={ bm, tag -> addTag2Bookmark(bm, tag) },
                             deleteTag = { bm, tag -> deleteTagFromBookmark(bm, tag) },
                             addSearchTag= { addSearchTag(it) },
-                            deleteSearchTag = {deleteSearchTag(it)},
+                            deleteSearchTag = {
+                                searchTags.remove(it)
+                                registerSnapshotListener()
+                            },
                             openUrl = { url -> openUrl(url) },
                             login= { login() },
                             logout= { logout() },
                         )
                     } else {
                         LoadingScreen(
-                            modifier = Modifier.fillMaxSize(1f),
+                            modifier = Modifier,
                             onLoginClicked = {
-                                logout()
+                                if(auth.uid != null) logout()
                                 login()
                             },
                         )
@@ -431,11 +436,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun deleteSearchTag(tag: String) {
-        searchTags.remove(tag)
-        registerSnapshotListener()
-    }
-
 
     private fun userChanged(user: FirebaseUser?) {
         isConnected = true
@@ -457,6 +457,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainScreen(
     bookmarks: SnapshotStateList<Bookmark>,
+    searchTags: SnapshotStateList<String>,
     addBookmark: (Bookmark) -> Unit,
     updateBookmark: (Bookmark) -> Unit,
     deleteBookmark: (Bookmark) -> Unit,
@@ -471,25 +472,30 @@ fun MainScreen(
     var showAddDialog by remember { mutableStateOf(false) }
 
     Scaffold(
-        topBar = {
-            // TODO: アプリバーとSearchTag一覧作成
-        },
         floatingActionButton = {
             FloatingActionButton(onClick = { showAddDialog = true }) {
                 Icon(imageVector = Icons.Default.Add, contentDescription = null)
             }
         },
     ) {
-        BookmarkList(
-            modifier = Modifier.padding(it),
-            bookmarks = bookmarks,
-            editBookmark = { bm -> updateBookmark(bm) },
-            deleteBookmark = { bm -> deleteBookmark(bm) },
-            addSearchTag = { bm -> addSearchTag(bm) },
-            addTag = { bm, tag -> addTag(bm, tag) },
-            deleteTag = { bm, tag -> deleteTag(bm, tag) },
-            openUrl = { url -> openUrl(url) }
-        )
+        Column {
+
+            TopBar(
+                onTagClicked = { tag -> deleteSearchTag(tag) },
+                searchTags = searchTags,
+                onLogout = { logout() },
+            )
+            BookmarkList(
+                modifier = Modifier.padding(it),
+                bookmarks = bookmarks,
+                editBookmark = { bm -> updateBookmark(bm) },
+                deleteBookmark = { bm -> deleteBookmark(bm) },
+                addSearchTag = { bm -> addSearchTag(bm) },
+                addTag = { bm, tag -> addTag(bm, tag) },
+                deleteTag = { bm, tag -> deleteTag(bm, tag) },
+                openUrl = { url -> openUrl(url) }
+            )
+        }
     }
 
     if(showAddDialog) {
