@@ -1,6 +1,5 @@
 package com.github.mutoxu_n.mybookmark
 
-import android.util.Log
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
@@ -58,6 +57,7 @@ fun BookmarkList(
     searchFromTag: (String) -> Unit,
     addTag: (Bookmark, String) -> Unit,
     deleteTag: (Bookmark, String) -> Unit,
+    openUrl: (String) -> Unit,
 ){
     var currentBookmark by remember { mutableStateOf<Bookmark?>(null) }
     var showEditBookmarkDialog by remember { mutableStateOf(false) }
@@ -88,6 +88,7 @@ fun BookmarkList(
                     onDeleteTagClicked = { bm, tag ->
                         deleteTag(bm, tag)
                     },
+                    openUrl = { openUrl(it) }
                 )
             }
         }
@@ -133,6 +134,7 @@ fun BookmarkListItem(
     onTagClicked: (String) -> Unit,
     onAddTagClicked: (Bookmark) -> Unit,
     onDeleteTagClicked: (Bookmark, String) -> Unit,
+    openUrl: (String) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     val animArrowRot by animateFloatAsState(targetValue = if (expanded) 180f else 0f, label = "")
@@ -193,7 +195,7 @@ fun BookmarkListItem(
                             modifier = modifier
                                 .weight(1f)
                                 .padding(5.dp, 0.dp)
-                                .clickable { },
+                                .clickable { openUrl(bookmark.url) },
                             text = bookmark.url
                                 .replace("https://", "")
                                 .replace("http://", ""),
@@ -271,7 +273,8 @@ fun BookmarkListItemPreview() {
             onDeleteClicked = {},
             onAddTagClicked = {},
             onTagClicked = {},
-            onDeleteTagClicked = { _, _ -> }
+            onDeleteTagClicked = { _, _ -> },
+            openUrl = {}
         )
     }
 }

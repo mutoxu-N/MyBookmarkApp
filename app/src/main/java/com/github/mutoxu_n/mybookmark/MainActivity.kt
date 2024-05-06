@@ -1,5 +1,7 @@
 package com.github.mutoxu_n.mybookmark
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
@@ -150,6 +152,7 @@ class MainActivity : ComponentActivity() {
                             addTag ={ bm, tag -> addTag2Bookmark(bm, tag) },
                             deleteTag = { bm, tag -> deleteTagFromBookmark(bm, tag) },
                             searchFromTag= {},
+                            openUrl = { url -> openUrl(url) },
                             login= { login() },
                             logout= { logout() },
                         )
@@ -365,6 +368,11 @@ class MainActivity : ComponentActivity() {
         auth.signOut()
     }
 
+    private fun openUrl(url: String) {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        startActivity(intent)
+    }
+
 
     private fun userChanged(user: FirebaseUser?) {
         isConnected = true
@@ -392,6 +400,7 @@ fun MainScreen(
     addTag: (Bookmark, String) -> Unit,
     deleteTag: (Bookmark, String) -> Unit,
     searchFromTag: (String) -> Unit,
+    openUrl: (String) -> Unit,
     login: () -> Unit,
     logout: () -> Unit,
 ) {
@@ -412,6 +421,7 @@ fun MainScreen(
             searchFromTag = { bm -> searchFromTag(bm) },
             addTag = { bm, tag -> addTag(bm, tag) },
             deleteTag = { bm, tag -> deleteTag(bm, tag) },
+            openUrl = { url -> openUrl(url) }
         )
     }
 
