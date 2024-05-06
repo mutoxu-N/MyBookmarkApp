@@ -32,9 +32,9 @@ fun BookmarkDialog(
     onDismissed: () -> Unit,
 ) {
     var title by remember { mutableStateOf(bookmark?.title ?: "") }
-    var isTitleError by remember { mutableStateOf(bookmark == null) }
+    var isTitleError by remember { mutableStateOf(bookmark == null || bookmark.title.isBlank()) }
     var url by remember { mutableStateOf(bookmark?.url ?: "") }
-    var isUrlError by remember { mutableStateOf(bookmark == null) }
+    var isUrlError by remember { mutableStateOf(bookmark == null || bookmark.url.isBlank()) }
     var description by remember { mutableStateOf(bookmark?.description ?: "") }
     
     AlertDialog(

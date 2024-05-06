@@ -60,6 +60,7 @@ class MainActivity : ComponentActivity() {
     private var bookmarks = mutableStateListOf<Bookmark>()
     private var searchTags = mutableStateListOf<String>()
     private var isConnected by mutableStateOf(false)
+    private var isShared by mutableStateOf(false)
     private var snapshotListener: ListenerRegistration? = null
 
 
@@ -113,6 +114,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // 共有されたURLか確認
+        when(intent?.action) {
+            Intent.ACTION_SEND -> {
+                if("text/plain" == intent.type)
+                    isShared = true
+
+            }
+        }
+
         // SignInClient取得
         signInClient = Identity.getSignInClient(this@MainActivity)
 
@@ -123,8 +133,10 @@ class MainActivity : ComponentActivity() {
         firestore = Firebase.firestore
 
         if (BuildConfig.DEBUG) {
-            auth.useEmulator(AUTH_EMULATOR_HOST, AUTH_EMULATOR_PORT)
-            firestore.useEmulator(FIRESTORE_EMULATOR_HOST, FIRESTORE_EMULATOR_PORT)
+            try {
+                auth.useEmulator(AUTH_EMULATOR_HOST, AUTH_EMULATOR_PORT)
+                firestore.useEmulator(FIRESTORE_EMULATOR_HOST, FIRESTORE_EMULATOR_PORT)
+            } catch (_: IllegalStateException) {}
         }
 
         // ログイン
@@ -149,7 +161,7 @@ class MainActivity : ComponentActivity() {
                         MainScreen(
                             bookmarks = bookmarks,
                             searchTags = searchTags,
-                            addBookmark= {createBookmark(it) },
+                            addBookmark= {addBookmark(it) },
                             updateBookmark = { updateBookmark(it)},
                             deleteBookmark = { deleteBookmark(it) },
                             addTag ={ bm, tag -> addTag2Bookmark(bm, tag) },
@@ -172,13 +184,29 @@ class MainActivity : ComponentActivity() {
                             },
                         )
                     }
+
+                    if(isShared && intent.getStringExtra(Intent.EXTRA_TEXT) != null) {
+                        BookmarkDialog(
+                            bookmark = Bookmark(
+                                title = "",
+                                url = intent.getStringExtra(Intent.EXTRA_TEXT)!!,
+                                description = "",
+                                tags = listOf(),
+                            ),
+                            onDismissed = { isShared = false },
+                            onConfirmed = { bookmark ->
+                                addBookmark(bookmark)
+                                isShared = false
+                            },
+                        )
+                    }
                 }
             }
         }
     }
 
 
-    private fun createBookmark(bookmark: Bookmark) {
+    private fun addBookmark(bookmark: Bookmark) {
         if(auth.uid == null) return
 
         val ref = firestore
@@ -496,6 +524,7 @@ fun MainScreen(
                 openUrl = { url -> openUrl(url) }
             )
         }
+
     }
 
     if(showAddDialog) {
