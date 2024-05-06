@@ -14,6 +14,6 @@ data class Tag(
 
     companion object {
         const val FIELD_NAME = "name"
-        const val FIELD_BOOKMARKS = "bookmarkIds"
+        const val FIELD_BOOKMARK_IDS = "bookmarkIds"
     }
 }

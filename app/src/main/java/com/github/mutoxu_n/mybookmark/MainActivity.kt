@@ -57,6 +57,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var firestore: FirebaseFirestore
     private lateinit var signInClient: SignInClient
     private var bookmarks = mutableStateListOf<Bookmark>()
+    private var searchTags = mutableStateListOf<String>()
     private var isConnected by mutableStateOf(false)
     private var snapshotListener: ListenerRegistration? = null
 
@@ -151,7 +152,8 @@ class MainActivity : ComponentActivity() {
                             deleteBookmark = { deleteBookmark(it) },
                             addTag ={ bm, tag -> addTag2Bookmark(bm, tag) },
                             deleteTag = { bm, tag -> deleteTagFromBookmark(bm, tag) },
-                            searchFromTag= {},
+                            addSearchTag= { addSearchTag(it) },
+                            deleteSearchTag = {deleteSearchTag(it)},
                             openUrl = { url -> openUrl(url) },
                             login= { login() },
                             logout= { logout() },
@@ -244,15 +246,15 @@ class MainActivity : ComponentActivity() {
                 tagRef.set(
                     mapOf(
                         Tag.FIELD_NAME to tag,
-                        Tag.FIELD_BOOKMARKS to listOf(bookmark.documentId),
+                        Tag.FIELD_BOOKMARK_IDS to listOf(bookmark.documentId),
                     )
                 )
 
             } else {
                 // タグが存在するとき
-                val tags = it.result.data?.get(Tag.FIELD_BOOKMARKS) as List<*>?
+                val tags = it.result.data?.get(Tag.FIELD_BOOKMARK_IDS) as List<*>?
                 if (tags != null)
-                    tagRef.update(Tag.FIELD_BOOKMARKS, tags.toMutableList().apply { add(bookmark.documentId) })
+                    tagRef.update(Tag.FIELD_BOOKMARK_IDS, tags.toMutableList().apply { add(bookmark.documentId) })
             }
         }
 
@@ -282,43 +284,91 @@ class MainActivity : ComponentActivity() {
 
         tagRef.get().addOnCompleteListener {
             // タグが存在するとき
-            val tags = it.result.data?.get(Tag.FIELD_BOOKMARKS) as List<*>? ?: return@addOnCompleteListener
+            val tags = it.result.data?.get(Tag.FIELD_BOOKMARK_IDS) as List<*>? ?: return@addOnCompleteListener
             val newTags = tags.toMutableList().apply { remove(bookmark.documentId) }
 
             // 対応するブックマークがなくなったら削除
             if(newTags.isEmpty()) tagRef.delete()
-            else tagRef.update(Tag.FIELD_BOOKMARKS, newTags)
+            else tagRef.update(Tag.FIELD_BOOKMARK_IDS, newTags)
         }
     }
 
 
-    // アプリ起動時にFirestoreリスナを設定
+    // Firestoreリスナを設定
     private fun registerSnapshotListener() {
-        firestore
-            .collection("users")
-            .document(auth.uid!!)
-            .collection("bookmarks")
-            .orderBy(Bookmark.FIELD_TIMESTAMP, Query.Direction.ASCENDING)
-            .addSnapshotListener { value, error ->
-                if(error != null) {
-                    Log.w(TAG, "Firestore / Listen failed!", error)
-                    return@addSnapshotListener
-                }
+        snapshotListener?.remove()
 
-                if(value != null) {
-                    bookmarks.clear()
-                    value.forEach {
-                        // データをBookmarkに変更してbookmarksを更新
-                        try {
-                            bookmarks.add(Bookmark.toBookmark(it.data))
+        if(searchTags.isEmpty())
+            snapshotListener = firestore
+                .collection("users")
+                .document(auth.uid!!)
+                .collection("bookmarks")
+                .orderBy(Bookmark.FIELD_TIMESTAMP, Query.Direction.ASCENDING)
+                .addSnapshotListener { value, error ->
+                    if(error != null) {
+                        Log.w(TAG, "Firestore / Listen failed!", error)
+                        return@addSnapshotListener
+                    }
 
-                        } catch (e: ClassCastException) {
-                            Log.w(TAG, "Data from Firestore cannot be converted to Bookmark")
-                            e.printStackTrace()
+                    if(value != null) {
+                        bookmarks.clear()
+                        value.forEach {
+                            // データをBookmarkに変更してbookmarksを更新
+                            try {
+                                bookmarks.add(Bookmark.toBookmark(it.data))
+
+                            } catch (e: ClassCastException) {
+                                Log.w(TAG, "Data from Firestore cannot be converted to Bookmark")
+                                e.printStackTrace()
+                            }
                         }
                     }
                 }
-            }
+        else {
+            firestore
+                .collection("users")
+                .document(auth.uid!!)
+                .collection("tags")
+                .whereIn(Tag.FIELD_NAME, searchTags)
+                .get().addOnSuccessListener {
+                    // タグに含まれているブックマークIDを探す
+                    val bookmarkIds = mutableListOf<String>()
+                    it.documents.forEach { docs ->
+                        for(id in (docs[Tag.FIELD_BOOKMARK_IDS] as List<*>).map { obj -> obj.toString() })
+                            if(!bookmarkIds.contains(id))
+                                bookmarkIds.add(id)
+                    }
+
+                    // ブックマーク一覧を取得
+                    snapshotListener = firestore
+                        .collection("users")
+                        .document(auth.uid!!)
+                        .collection("bookmarks")
+                        .whereIn(Bookmark.FIELD_DOCUMENT_ID, bookmarkIds)
+                        .orderBy(Bookmark.FIELD_TIMESTAMP, Query.Direction.ASCENDING)
+                        .addSnapshotListener { value, error ->
+                            if(error != null) {
+                                Log.w(TAG, "Firestore / Listen failed!", error)
+                                return@addSnapshotListener
+                            }
+
+                            if(value != null) {
+                                bookmarks.clear()
+                                value.forEach {
+                                    // データをBookmarkに変更してbookmarksを更新
+                                    try {
+                                        bookmarks.add(Bookmark.toBookmark(it.data))
+
+                                    } catch (e: ClassCastException) {
+                                        Log.w(TAG, "Data from Firestore cannot be converted to Bookmark")
+                                        e.printStackTrace()
+                                    }
+                                }
+                            }
+                        }
+                }
+
+        }
     }
 
 
@@ -366,11 +416,24 @@ class MainActivity : ComponentActivity() {
         snapshotListener?.remove()
         snapshotListener = null
         auth.signOut()
+        isConnected = false
     }
 
     private fun openUrl(url: String) {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
         startActivity(intent)
+    }
+
+    private fun addSearchTag(tag: String) {
+        if(!searchTags.contains(tag)) {
+            searchTags.add(tag)
+            registerSnapshotListener()
+        }
+    }
+
+    private fun deleteSearchTag(tag: String) {
+        searchTags.remove(tag)
+        registerSnapshotListener()
     }
 
 
@@ -399,7 +462,8 @@ fun MainScreen(
     deleteBookmark: (Bookmark) -> Unit,
     addTag: (Bookmark, String) -> Unit,
     deleteTag: (Bookmark, String) -> Unit,
-    searchFromTag: (String) -> Unit,
+    addSearchTag: (String) -> Unit,
+    deleteSearchTag: (String) -> Unit,
     openUrl: (String) -> Unit,
     login: () -> Unit,
     logout: () -> Unit,
@@ -407,18 +471,21 @@ fun MainScreen(
     var showAddDialog by remember { mutableStateOf(false) }
 
     Scaffold(
+        topBar = {
+            // TODO: アプリバーとSearchTag一覧作成
+        },
         floatingActionButton = {
             FloatingActionButton(onClick = { showAddDialog = true }) {
                 Icon(imageVector = Icons.Default.Add, contentDescription = null)
             }
-        }
+        },
     ) {
         BookmarkList(
             modifier = Modifier.padding(it),
             bookmarks = bookmarks,
             editBookmark = { bm -> updateBookmark(bm) },
             deleteBookmark = { bm -> deleteBookmark(bm) },
-            searchFromTag = { bm -> searchFromTag(bm) },
+            addSearchTag = { bm -> addSearchTag(bm) },
             addTag = { bm, tag -> addTag(bm, tag) },
             deleteTag = { bm, tag -> deleteTag(bm, tag) },
             openUrl = { url -> openUrl(url) }

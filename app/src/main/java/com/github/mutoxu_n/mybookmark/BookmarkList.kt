@@ -54,7 +54,7 @@ fun BookmarkList(
     bookmarks: SnapshotStateList<Bookmark>,
     editBookmark: (Bookmark) -> Unit,
     deleteBookmark: (Bookmark) -> Unit,
-    searchFromTag: (String) -> Unit,
+    addSearchTag: (String) -> Unit,
     addTag: (Bookmark, String) -> Unit,
     deleteTag: (Bookmark, String) -> Unit,
     openUrl: (String) -> Unit,
@@ -79,7 +79,7 @@ fun BookmarkList(
                         currentBookmark = it
                     },
                     onDeleteClicked = { deleteBookmark(it) },
-                    onTagClicked = { searchFromTag(it) },
+                    onTagClicked = { addSearchTag(it) },
                     onAddTagClicked = {
                         showEditBookmarkDialog = false
                         showAddTagDialog = true
